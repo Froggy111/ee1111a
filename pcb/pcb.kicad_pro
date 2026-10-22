@@ -43,11 +43,11 @@
           "height": 1.27,
           "width": 1.27
         },
-        "silk_line_width": 0.1,
+        "silk_line_width": 0.05,
         "silk_text_italic": false,
         "silk_text_size_h": 0.5,
         "silk_text_size_v": 0.5,
-        "silk_text_thickness": 0.1,
+        "silk_text_thickness": 0.05,
         "silk_text_upright": false,
         "zones": {
           "border_display_style": 2,
@@ -162,7 +162,7 @@
         "min_track_width": 0.1,
         "min_via_annular_width": 0.075,
         "min_via_diameter": 0.45,
-        "solder_mask_to_copper_clearance": 0.0,
+        "solder_mask_to_copper_clearance": 0.005,
         "use_height_for_length_calcs": true
       },
       "teardrop_options": [
@@ -736,7 +736,7 @@
         "uuid": "124991ae-9d31-41fe-b759-30be3a40922b"
       }
     ],
-    "used_designators": "#FLG1-9,#PWR1-92,C1-66,D1-5,F1-2,FB1-2,FB7-8,J1-6,J18,L1-2,Q1-8,R1-38,R93-94,SW1-2,U1-8,U25,Y1",
+    "used_designators": "#FLG1-9,#PWR1-92,C1-66,D1-5,F1-2,FB1-2,FB7-8,H1-3,J1-6,J18,L1-2,Q1-8,R1-38,R93-94,SW1-2,U1-9,U25,Y1",
     "variants": []
   },
   "sheets": [
