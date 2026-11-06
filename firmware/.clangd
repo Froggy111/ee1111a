@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - --target=arm-none-eabi
+    - -nostdinc++
+    - -isystem/usr/arm-none-eabi/include/c++/16.2.0
+    - -isystem/usr/lib/gcc/arm-none-eabi/16.2.0/include
+    - -isystem/usr/arm-none-eabi/include/c++/16.2.0/arm-none-eabi
