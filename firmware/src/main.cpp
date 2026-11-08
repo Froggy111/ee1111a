@@ -153,9 +153,14 @@ int main() {
             enable_output();
         }
 
+        // TODO: add cell balancing
+
         // use ina219 conv as a clock because im lazy
         if (psensor.read_status_bus().conv_ready) {
             if (voltages.total > BATT_STOP_CHARGING_THRESHOLD) {
+                printf("battery voltage: %f, stopping...\n", voltages.total);
+                printf("cell1: %f, cell2: %f, cell3: %f\n", voltages.cell1,
+                       voltages.cell2, voltages.cell3);
                 boost_ctrl.set(0.0f);
                 state = State::Stopped;
             } else if ((voltages.total > SWITCH_BATT_MODE_THRESHOLD) &
@@ -163,9 +168,18 @@ int main() {
                 if (state != State::Cc) {
                     current_pid.reset(current);
                     duty = 0.0f;
+                    boost_ctrl.set(duty);
+                } else {
+                    duty += current_pid.update(current);
+                    boost_ctrl.set(duty);
                 }
-                duty += current_pid.update(current);
-                boost_ctrl.set(duty);
+                printf(
+                    "cc charging, battery voltage: %f, charge current: %f, "
+                    "charge power: %f, duty: %f\n",
+                    voltages.total, current, power, duty);
+                printf("cell1: %f, cell2: %f, cell3: %f\n", voltages.cell1,
+                       voltages.cell2, voltages.cell3);
+                state = State::Cc;
             } else {
                 bool dir = pao_dir ^ (power < prev_power);
                 if (dir) {
@@ -179,6 +193,13 @@ int main() {
                     duty = 0.0f;
                 }
                 boost_ctrl.set(duty);
+                printf(
+                    "mppt charging, battery voltage: %f, charge current: %f, "
+                    "charge power: %f, duty: %f\n",
+                    voltages.total, current, power, duty);
+                printf("cell1: %f, cell2: %f, cell3: %f\n", voltages.cell1,
+                       voltages.cell2, voltages.cell3);
+                state = State::Mppt;
             }
             current = read_current();
             // this clears `conv_ready`
@@ -186,10 +207,6 @@ int main() {
             power = read_power();
             voltages = read_voltages();
         }
-    }
-    while (true) {
-        printf("hello world\n");
-        sleep_ms(1000);
     }
 }
 
