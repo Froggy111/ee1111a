@@ -33,8 +33,8 @@ drain::Drain<drain::Config(pins::drain::EN3, pins::drain::NSW3, 1,
                            pwm::Channel::B, DRAIN_PWM_FREQ)>
     cell3_drain;
 
-constexpr float BOOST_PWM_FREQ = 1.5e6;
-constexpr float BOOST_MAX_DUTY = 0.7;
+constexpr float BOOST_PWM_FREQ = 1.5e5;
+constexpr float BOOST_MAX_DUTY = 0.8;
 boost::Boost<boost::Config(pins::BOOST_EN, pins::BOOST_SW, 2, pwm::Channel::A,
                            BOOST_PWM_FREQ, BOOST_MAX_DUTY)>
     boost_ctrl;
@@ -72,7 +72,7 @@ u16 sat_sub(u16 lhs, u16 rhs) {
     if (rhs > lhs) {
         return 0;
     } else {
-        return rhs - lhs;
+        return lhs - rhs;
     }
 }
 
@@ -108,14 +108,14 @@ BattVoltages read_voltages() {
 inline float read_batt_v() {
     adc_select_input(BATT_ADC_CH);
     u16 val = adc_read();
-    return ((float)val / (float)VSENSE_OVERSAMPLE_COUNT) * VSENSE_SCALE;
+    return (float)val * VSENSE_SCALE;
 }
 
 inline float read_current() {
     return (float)psensor.read_current() / (1 << 14);
 }
 inline float read_power() {
-    return (float)(psensor.read_current() * 20.0f) / (1 << 14);
+    return (float)(psensor.read_power() * 20.0f) / (1 << 14);
 }
 inline void enable_output() { gpio_put(pins::USB_PWRON, 1); }
 inline void disable_output() { gpio_put(pins::USB_PWRON, 0); }
@@ -127,6 +127,7 @@ enum class State : u8 {
 };
 
 int main() {
+    init();
     // this is stupid, but im too lazy to set things up properly
     State state = State::Stopped;
     pid::Pid<pid::Config{.kp = -0.1f,
@@ -136,7 +137,7 @@ int main() {
                          .max = BOOST_MAX_DUTY}>
         current_pid;
     current_pid.set_target(CC_CHARGE_CURRENT);
-    float duty = 0.0f;
+    float duty = 0.4f;
     BattVoltages voltages = read_voltages();
     while (!psensor.read_status_bus().conv_ready) {
     }
@@ -154,9 +155,15 @@ int main() {
         }
 
         // TODO: add cell balancing
-
+        ina219b::Status status = psensor.read_status_bus();
         // use ina219 conv as a clock because im lazy
-        if (psensor.read_status_bus().conv_ready) {
+        if (status.conv_ready) {
+            current = read_current();
+            // this clears `conv_ready`
+            prev_power = power;
+            power = read_power();
+            voltages = read_voltages();
+
             if (voltages.total > BATT_STOP_CHARGING_THRESHOLD) {
                 printf("battery voltage: %f, stopping...\n", voltages.total);
                 printf("cell1: %f, cell2: %f, cell3: %f\n", voltages.cell1,
@@ -174,9 +181,11 @@ int main() {
                     boost_ctrl.set(duty);
                 }
                 printf(
-                    "cc charging, battery voltage: %f, charge current: %f, "
+                    "cc charging, battery voltage: %f, PV voltage: %f, PV "
+                    "current: %f, "
                     "charge power: %f, duty: %f\n",
-                    voltages.total, current, power, duty);
+                    voltages.total, (float)status.bus_voltage * 4.0e-3, current,
+                    power, duty);
                 printf("cell1: %f, cell2: %f, cell3: %f\n", voltages.cell1,
                        voltages.cell2, voltages.cell3);
                 state = State::Cc;
@@ -187,30 +196,34 @@ int main() {
                 } else {
                     duty -= PAO_STEP_SIZE;
                 }
-                if (duty > BOOST_MAX_DUTY) {
+                if (duty >= BOOST_MAX_DUTY) {
                     duty = BOOST_MAX_DUTY;
-                } else if (duty < 0.0f) {
+                    dir = false;
+                } else if (duty <= 0.0f) {
                     duty = 0.0f;
+                    dir = true;
                 }
+                // duty = 0.5f;
+                pao_dir = dir;
                 boost_ctrl.set(duty);
                 printf(
-                    "mppt charging, battery voltage: %f, charge current: %f, "
+                    "mppt charging, battery voltage: %f, PV voltage: %f, PV "
+                    "current: %f, "
                     "charge power: %f, duty: %f\n",
-                    voltages.total, current, power, duty);
+                    voltages.total, (float)status.bus_voltage * 4.0e-3, current,
+                    power, duty);
                 printf("cell1: %f, cell2: %f, cell3: %f\n", voltages.cell1,
                        voltages.cell2, voltages.cell3);
                 state = State::Mppt;
             }
-            current = read_current();
-            // this clears `conv_ready`
-            prev_power = power;
-            power = read_power();
-            voltages = read_voltages();
         }
     }
 }
 
 inline void init() {
+    stdio_init_all();
+    sleep_ms(4000);
+
     i2c_init(I2C, conf::I2C_BAUD);
     // we have external pullups
     gpio_disable_pulls(pins::SDA);
@@ -240,6 +253,4 @@ inline void init() {
     gpio_set_function(pins::USB_PWRON, GPIO_FUNC_SIO);
     gpio_set_dir(pins::USB_PWRON, true);
     gpio_put(pins::USB_PWRON, false);
-
-    stdio_init_all();
 }

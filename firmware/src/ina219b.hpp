@@ -1,5 +1,6 @@
 #pragma once
 #include <hardware/i2c.h>
+#include <pico/stdio.h>
 
 #include "types.hpp"
 
@@ -15,8 +16,6 @@ const u8 POWER = 0x03;          // RO
 const u8 CURRENT = 0x04;        // RO
 const u8 CALIBRATION = 0x05;    // RO
 }  // namespace addr
-
-enum class Op : u8 { Read = 1, Write = 0 };
 
 enum class BusRange : u8 {
     _16V = 0,
@@ -82,23 +81,20 @@ class Ina219B {
    private:
     i2c_inst* i2c;
     inline void write(const u8 addr, u16 val) {
-        const u8 i2c_addr = CONF.addr | ((u8)Op::Write << 7);
-        u8 buf[4];
-        buf[0] = i2c_addr;
-        buf[1] = addr;
+        u8 buf[3];
+        buf[0] = addr;
         // BE
-        buf[2] = val >> 8;
-        buf[3] = val & 0xFF;
-        i2c_write_blocking(i2c, i2c_addr, buf, sizeof(buf), false);
+        buf[1] = val >> 8;
+        buf[2] = val & 0xFF;
+        i2c_write_blocking(i2c, CONF.addr, buf, sizeof(buf), false);
     }
     inline u16 read(const u8 addr) {
-        const u8 i2c_addr = CONF.addr | ((u8)Op::Read << 7);
-        u8 buf[2] = {i2c_addr, addr};
-        i2c_write_blocking(i2c, CONF.addr, buf, sizeof(buf),
+        u8 buf[2] = {addr, 0};
+        i2c_write_blocking(i2c, CONF.addr, buf, 1,
                            true);  // middle of transaction
-        i2c_read_blocking(i2c, CONF.addr, buf, sizeof(u16), false);
+        i2c_read_blocking(i2c, CONF.addr, buf, 2, false);
         // BE
-        return buf[1] & ((u16)buf[0] << 8);
+        return buf[1] | ((u16)buf[0] << 8);
     }
     constexpr u16 calibration_val() {
         return (u16)(0.04096 / (CONF.current_lsb * CONF.resistance));
