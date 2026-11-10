@@ -2,6 +2,8 @@
 #include <hardware/i2c.h>
 #include <pico/stdio.h>
 
+#include <cstdio>
+
 #include "types.hpp"
 
 namespace ina219b {
@@ -124,8 +126,14 @@ class Ina219B {
     }
     // in units of `CONF.current_lsb`
     inline i16 read_current() { return (i16)this->read(addr::CURRENT); }
+    inline float read_current_amps() {
+        return (float)this->read_current() * CONF.current_lsb;
+    }
     // in units of `CONF.current_lsb * 20`
     inline i16 read_power() { return (i16)this->read(addr::POWER); }
+    inline float read_power_watts() {
+        return ((float)this->read_power() * 20.0) * CONF.current_lsb;
+    }
 };
 
 }  // namespace ina219b

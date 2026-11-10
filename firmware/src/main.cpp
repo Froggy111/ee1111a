@@ -34,7 +34,7 @@ drain::Drain<drain::Config(pins::drain::EN3, pins::drain::NSW3, 1,
     cell3_drain;
 
 constexpr float BOOST_PWM_FREQ = 1.5e5;
-constexpr float BOOST_MAX_DUTY = 0.8;
+constexpr float BOOST_MAX_DUTY = 0.7;
 boost::Boost<boost::Config(pins::BOOST_EN, pins::BOOST_SW, 2, pwm::Channel::A,
                            BOOST_PWM_FREQ, BOOST_MAX_DUTY)>
     boost_ctrl;
@@ -48,7 +48,7 @@ ina219b::Ina219B<ina219b::Config{
     .operating_mode = ina219b::OperatingMode::ShuntBusContinuous,
     .resistance = 0.01f,
     // q1.14
-    .current_lsb = 1.0 / (float)(1 << 14)}>
+    .current_lsb = 1.0 / (float)(1 << 13)}>
     psensor(I2C);
 
 constexpr float SWITCH_BATT_MODE_THRESHOLD = 12.4;
@@ -111,12 +111,6 @@ inline float read_batt_v() {
     return (float)val * VSENSE_SCALE;
 }
 
-inline float read_current() {
-    return (float)psensor.read_current() / (1 << 14);
-}
-inline float read_power() {
-    return (float)(psensor.read_power() * 20.0f) / (1 << 14);
-}
 inline void enable_output() { gpio_put(pins::USB_PWRON, 1); }
 inline void disable_output() { gpio_put(pins::USB_PWRON, 0); }
 
@@ -137,13 +131,13 @@ int main() {
                          .max = BOOST_MAX_DUTY}>
         current_pid;
     current_pid.set_target(CC_CHARGE_CURRENT);
-    float duty = 0.4f;
+    float duty = 0.5f;
     BattVoltages voltages = read_voltages();
     while (!psensor.read_status_bus().conv_ready) {
     }
-    float current = read_current();
+    float current = psensor.read_current_amps();
     // this clears `conv_ready`
-    float power = read_power();
+    float power = psensor.read_power_watts();
     float prev_power = power;
     bool pao_dir = true;
 
@@ -158,10 +152,10 @@ int main() {
         ina219b::Status status = psensor.read_status_bus();
         // use ina219 conv as a clock because im lazy
         if (status.conv_ready) {
-            current = read_current();
+            current = psensor.read_current_amps();
             // this clears `conv_ready`
             prev_power = power;
-            power = read_power();
+            power = psensor.read_power_watts();
             voltages = read_voltages();
 
             if (voltages.total > BATT_STOP_CHARGING_THRESHOLD) {
@@ -222,7 +216,6 @@ int main() {
 
 inline void init() {
     stdio_init_all();
-    sleep_ms(4000);
 
     i2c_init(I2C, conf::I2C_BAUD);
     // we have external pullups
